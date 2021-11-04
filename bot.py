@@ -81,7 +81,7 @@ async def donation_name(message: types.Message, state: FSMContext):
 		if len(res) == 0:
 			if len(message.text) <= 20:
 				if not message.text.startswith('/'):
-					q.execute('UPDATE users SET name = ? WHERE user_id = ?', (message.text.lower(), message.from_user.id))
+					q.execute('UPDATE users SET name = ? WHERE user_id = ?', (message.text.lower(), message.chat.id))
 					connection.commit()
 					await message.answer('Хорошо, теперь введите сумму, которую хотите задонатить..', reply_markup=kb.back)
 					await don.cost.set()
@@ -101,7 +101,7 @@ async def donation_anonimous(message: types.Message, state: FSMContext):
 		await state.finish()
 	else:
 		if message.text.isdigit():
-			link = await fc.pay(message.from_user.id, message.text)
+			link = await fc.pay(message.chat.id, message.text)
 			keyboard = await kb.buy(link)
 			await message.answer('...', reply_markup=kb.menu)
 			await message.answer(f'Счет для оплаты выставлен, перейдите по ссылке для оплаты', reply_markup=keyboard)
@@ -116,7 +116,7 @@ async def donation_process(message: types.Message, state: FSMContext):
 		await state.finish()
 	else:
 		if message.text.isdigit():
-			link = await fc.pay(message.from_user.id, message.text)
+			link = await fc.pay(message.chat.id, message.text)
 			keyboard = await kb.buy(link)
 			await message.answer('...', reply_markup=kb.menu)
 			await message.answer(f'Счет для оплаты выставлен, перейдите по ссылке для оплаты', reply_markup=keyboard)
@@ -127,7 +127,7 @@ async def donation_process(message: types.Message, state: FSMContext):
 @dp.callback_query_handler(lambda call: call.data == 'check')
 async def checkpay(call):
 	try:
-		re = q.execute(f"SELECT bd FROM users WHERE user_id = ?", (call.message.from_user.id, )).fetchone()
+		re = q.execute(f"SELECT bd FROM users WHERE user_id = ?", (call.message.chat.id, )).fetchone()
 		status = wallet_p2p.invoice_status(bill_id=re[0])
 		a = status['status']['value']
 		am = status['amount']['value']
@@ -135,22 +135,22 @@ async def checkpay(call):
 		if a == 'WAITING':
 			await call.message.answer('Ошибка! Платёж не найден.')
 		elif a == 'PAID':
-			q.execute('UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.from_user.id, ))
+			q.execute('UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.chat.id, ))
 			connection.commit()
-			q.execute('UPDATE users SET donated = ? WHERE user_id = ?', (amount, call.message.from_user.id))
+			q.execute('UPDATE users SET donated = ? WHERE user_id = ?', (amount, call.message.chat.id))
 			connection.commit()
 			await call.message.answer('Оплата успешно найдена, благодарим вас за поддержку!\nВы будете занесены в топ донатеров.')
-			await bot.send_message(admin, 'Новый донат!\nДонатер: {}\nID: {}\nСумма: {}₽\n'.format(call.message.from_user.mention, call.message.from_user.id, amount))
+			await bot.send_message(admin, 'Новый донат!\nДонатер: {}\nID: {}\nСумма: {}₽\n'.format(call.message.from_user.mention, call.message.chat.id, amount))
 		elif a == 'EXPIRED':
-			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.from_user.id, ))
+			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.chat.id, ))
 			connection.commit()
 			await call.message.answer('Время жизни счета истекло. Счет не оплачен', reply_markup=kb.menu)
 		elif a == 'REJECTED':
-			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.from_user.id, ))
+			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.chat.id, ))
 			connection.commit()
 			await call.message.answer('Счет отклонен', reply_markup=kb.menu)
 		elif a == 'UNPAID':
-			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.from_user.id, ))
+			q.execute(f'UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.chat.id, ))
 			connection.commit()
 			await call.message.answer('Ошибка при проведении оплаты. Счет не оплачен', reply_markup=kb.menu)
 	except Exception as err:
@@ -159,10 +159,10 @@ async def checkpay(call):
 @dp.callback_query_handler(lambda call: call.data == 'cancel')
 async def back(call):
 	try:
-		billid = q.execute('SELECT bd FROM users WHERE user_id = ?', (call.message.from_user.id, )).fetchone()
+		billid = q.execute('SELECT bd FROM users WHERE user_id = ?', (call.message.chat.id, )).fetchone()
 		connection.commit()
 		wallet_p2p.cancel_invoice(bill_id=billid[0])
-		q.execute('UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.from_user.id, ))
+		q.execute('UPDATE users SET bd = 0 WHERE user_id = ?', (call.message.chat.id, ))
 		connection.commit()
 		await call.message.answer('Хорошо, выставленные счета отклонены...', reply_markup=kb.menu)
 	except Exception as err:
